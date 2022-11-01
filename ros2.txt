@@ -1,0 +1,145 @@
+*********************** How to create a Node Class *********************** 
+
+#include "rclcpp/rclcpp.hpp"
+
+class MyCustomNode : public rclcpp::Node // MODIFY NAME
+{
+public:
+    MyCustomNode() : Node("node_name") // MODIFY NAME
+    {
+    }
+
+private:
+};
+
+int main(int argc, char **argv)
+{
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<MyCustomNode>(); // MODIFY NAME
+    rclcpp::spin(node);
+    rclcpp::shutdown();
+    return 0;
+}
+
+
+*********************** How to create a Subscriber ***********************
+
+    auto subscriber = this->create_subscription<msg>("topic_name", buffer_size,
+                      std::bind(&MyCustomNode::SubscribeFunction, this, std::placeholders::_1));
+
+
+
+
+*********************** How to create a Publisher ***********************
+
+    auto publisher = this->create_publisher<msg>("topic_name", buffer_size);
+
+
+
+
+*********************** How to create a Client ***********************
+
+    auto client = this->create_client<srv_msg>("service_name");
+
+    To call the service we are going to create a thread. This will prevent the node from being blocked.
+    std::thread(std::bind(&MyCustomNode::CallService, this));
+
+    void CallService()
+    {
+        while (!client->wait_for_service(std::chrono::seconds(1)))
+        {
+            RCLCPP_WARN(this->get_logger(), "Waiting to the service");
+        }
+
+        auto request = std::make_shared<srv_msg::Request>();
+        // Here fill your request msg
+
+        auto future = client->async_send_request(request);
+
+        try
+        {
+            auto response = future.get(); // This will block the thread
+        }
+        catch (const std::exception &e)
+        {
+            RCLCPP_ERROR(this->get_logger(), "Error service response");
+        }
+    }
+
+
+
+
+*********************** How to create a Service ***********************
+
+    auto service_ = this->create_service<srv_msg>("service_name",
+                    std::bind(&MyCustomNode::callbackServer, this,
+                    std::placeholders::_1, std::placeholders::_2));
+
+    void callbackServer(const srv_msg::Request::SharedPtr req,
+                            const srv_msg::Response::SharedPtr rep)
+    {
+        
+    }
+
+
+*********************** What has to be modified in CMake each time a new node is added ***********************
+
+////////////////  Hpp and Cpp files ////////////////
+
+    find_package(rclcpp REQUIRED)
+    find_package(pkg_name REQUIRED) <--- Add if your package has dependencies on other packages. Example: find_package(turtlesim REQUIRED)
+
+    include_directories(include)
+
+    <----- Every time you get a new cpp, add the two lines below -->
+    add_executable(turtle_spawner src/turtle_spawner.cpp) <--- Once for every n
+    ament_target_dependencies(turtle_spawner rclcpp turtlesim turtle_game_interfaces) <--- Add the dependencies 
+
+    <----- Other example ----->
+    add_executable(turtle_logic src/turtle_logic.cpp)
+    ament_target_dependencies(turtle_logic rclcpp turtlesim turtle_game_interfaces geometry_msgs)
+
+    <----- Install your new nodes ----->
+    install(TARGETS
+    turtle_spawner
+    turtle_logic
+    DESTINATION lib/${PROJECT_NAME})
+
+
+////////////////  Msg and Srv ////////////////
+
+    find_package(rosidl_default_generators REQUIRED) <----- Mandatory
+
+    rosidl_generate_interfaces(${PROJECT_NAME}
+    "msg/MsgName.msg"
+    "srv/SrvName.srv"
+    )
+
+
+//////////////// Launchers ////////////////
+
+<----- Just once ----->
+
+    install(DIRECTORY
+    launch
+    DESTINATION share/${PROJECT_NAME}
+    )
+
+
+*********************** What has to be modified in package.xml each time a new node is added ***********************
+
+////////////////  Hpp and Cpp files ////////////////
+
+<----- Dependencies to that new node. If they were already added before, a second time is not necessary.  ----->
+
+    <depend>turtle_game_interfaces</depend>
+
+////////////////  Msg and Srv ////////////////
+
+<----- Just once ----->
+
+    <exec_depend>rosidl_default_runtime</exec_depend>
+    <member_of_group>rosidl_interface_packages</member_of_group>
+
+
+
